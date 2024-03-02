@@ -1,0 +1,189 @@
+
+/* Crearea unui set de date SAS din fisiere externe */
+/* 1 Vom afisa output-ul fisierului text importat UsedCarList.txt */
+
+data usedCars;
+	length Id 3 Model $20 Transmisie $20 Combustibil $20;
+	infile '/home/u63359197/Proiect_Pachete/UsedCarList.txt' dlm=',';
+	input Id Model$ An Pret Transmisie$ Nr_Mile Combustibil$ Taxe Consum Capacitate_cil;
+run;
+
+data carSales;
+	length Id_Client 3 Nume $20 Data_Cumparare $20;
+	infile '/home/u63359197/Proiect_Pachete/car_sales_data.txt' dlm=',';
+	input Id_Client Nume$ Data_Cumparare$ Pret_Cumparare Id_Reprezentanta;
+run;
+
+data orase;
+	length Id 3 Oras $20;
+	infile '/home/u63359197/Proiect_Pachete/Orase.txt' dlm=',';
+	input Id Oras$;
+run;
+
+/* Crearea si folosirea de formate definite de utlilizator */
+/* 2 Creati un format care sa categorizeze consumul in trei divizii si afisati tabela cu formatul aplicat */
+proc format;
+	value consum 
+		low -< 25 = 'Consum mare'
+		25-35 = 'Consum rezonabil'
+		35 <- high = 'Consum mic';
+		
+data usedCarsNew;
+	set usedCars;
+	format Consum consum.;
+run;
+
+/* 3 Creati un format care sa determine sezonul in care clientii au cumparat masina. Adaugati o noua coloana care sa preia acest format  */
+proc format;
+	value sezon
+		1-2 = 'Winter'
+		3-5 = 'Spring'
+		6-8 = 'Summer'
+		9-11 = 'Fall'
+		12 = 'Winter';
+		
+data carSalesNew;
+	set carSales;
+	Month = input(scan(Data_Cumparare, 1, "/"), 2.);
+	Sezon = put(Month, sezon.);
+	drop Month;
+run;
+
+/* Procesarea iterativa si conditionala a datelor */
+/* 4 Afisati clientii care au cumparat masini in vara la un pret mai mic de 25000 */
+
+title 'Achizitii din vara la preturi mai mici de 25000';
+proc print data=carSalesNew;
+	where Sezon eq 'Summer' and Pret_Cumparare lt 25000;
+run;
+
+/* 5 Creati o noua coloana care sa afiseze daca masina e noua sau veche printr-o structura conditionala */
+data usedCarsCondition;
+	set usedCars;
+	length Vechime $20;
+	if An > 2017 then Vechime = 'Masina noua';
+	else Vechime = 'Masina veche';
+run;
+
+
+/* 6 Realizati media consumului pe model de masina, utilizand structuri repetitive */
+
+proc sort data=usedCars;
+	by Model;
+run;
+	
+data consumAvg;
+    set usedCars;
+    by Model;
+    consum_sum = 0;
+    consum_count = 0;
+
+    if first.Model then do;
+        do until (last.Model);
+            consum_sum = consum_sum + Consum;
+            consum_count = consum_count + 1;
+            set usedCars;
+            by Model;
+        end;
+        Medie = consum_sum / consum_count;
+    end;
+
+    drop consum_sum consum_count;
+run;		
+
+/* Crearea de subseturi de date */
+/* 7 Creati un subset ce contine date despre masinile cu transmisie manuala */
+
+title 'Masini cu transmisie manuala';
+proc print data=usedCarsNew;
+	where Transmisie eq 'Manuala';
+run;
+
+
+/* Utilizarea de functii SAS */
+/* 8 Afisati un raport al cheltuielilor clientilor la fiecare reprezentanta */
+proc sort data=carSalesNew;
+	by Id_Reprezentanta;
+run;
+
+title 'Cheltuieli clienti pe reprezentanta';
+proc print data=carSalesNew noobs;
+	by Id_Reprezentanta;
+	sum Pret_Cumparare;
+	var Nume Data_Cumparare Pret_Cumparare;
+run;
+
+/* 9 Afisati pentru fiecare tip de combustibil media, maximul si minimul pretului, numarului de mile si capacitatii cilindrice */
+proc sort data=usedCars;
+	by Combustibil;
+
+title 'Indicatori statistici in functie de combustibil';
+proc means data=usedCars mean max min;
+	by Combustibil;
+	var Pret Nr_Mile Capacitate_cil;
+run;
+	
+/* 10 Folositi proc means pentru exercitiul 8 */
+title 'Cheltuieli clienti pe reprezentanta';
+proc means data=carSalesNew sum;
+	by Id_Reprezentanta;
+	var Pret_Cumparare;
+run;
+
+/* Combinarea seturilor de date prin proceduri specifice SAS */
+/* 11 Combinati Orasele cu masinile vandute si afisati distributia modelelor pe orase*/
+proc sort data=usedCars;
+	by Id;
+proc sort data=orase;
+	by Id;
+data combinat;
+	merge usedCars orase;
+	by Id;
+run;
+title 'Distributia modelelor pe orase';
+proc freq data=combinat;
+	tables Oras*Model;
+run;
+
+/* Folosirea de proceduri statistice */
+/* 12 Realizati statistica descriptiva a consumului + histograma si a capacitatii cilindrice a masinilor */
+
+proc univariate data=usedCars;
+	var Consum Capacitate_cil;
+	histogram Consum;
+	title 'Statistici descriptive';
+run;
+
+/* 13 Realizati o analiza pe legatura dintre pret si numarul de mile al unei masini */
+
+title 'Analiza corelatiei dintre pret si numar mile';
+proc corr data=usedCars;
+	var Pret;
+	with Nr_Mile;
+run;
+
+SYMBOL value=dot;
+proc gplot data=usedCars;
+	plot Pret*Nr_Mile;
+run;
+quit;
+
+/* Generarea de grafice */
+/* 14 Realizati un grafic cu bare orizontale ce reprezinta valoarea totala a achizitiilor clientilor pe sezon */
+
+title 'Valoarea totala a achizitiilor clientilor pe sezon';
+proc gchart data=carSalesNew;
+	hbar Sezon / sumvar=Pret_Cumparare
+				type=sum;
+run;
+quit;
+
+
+/* 15 Realizati un grafic cu bare verticale ce reprezinta distributia masinilor pe transmisie si oras */
+
+title 'Distributia masinilor in functie de transmisie si oras';
+proc gchart data=combinat;
+	vbar Oras / subgroup=Transmisie;
+run;
+quit;
+	

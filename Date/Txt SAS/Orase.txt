@@ -1,0 +1,15 @@
+1,Bucuresti
+2,Munchen
+3,Paris
+4,Berlin
+5,Londra
+6,Lisabona
+7,Barcelona
+8,Stockolm
+9,Sofia
+10,Madrid
+11,Budapesta
+12,Viena
+13,Frankfurt
+14,Dortmund
+15,Koln
